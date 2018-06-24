@@ -1,14 +1,14 @@
 {-# OPTIONS  #-}
 -----------------------------------------------------------------------------
 -- |
--- Module      : Language.Python.Common.ParserUtils 
--- Copyright   : (c) 2009 Bernie Pope 
+-- Module      : Language.Python.Common.ParserUtils
+-- Copyright   : (c) 2009 Bernie Pope
 -- License     : BSD-style
 -- Maintainer  : bjpop@csse.unimelb.edu.au
 -- Stability   : experimental
 -- Portability : ghc
 --
--- Various utilities to support the Python parser. 
+-- Various utilities to support the Python parser.
 -----------------------------------------------------------------------------
 
 module Language.Python.Common.ParserUtils where
@@ -17,9 +17,9 @@ import Data.List (foldl')
 import Data.Maybe (isJust)
 import Control.Monad.Error.Class (throwError)
 import Language.Python.Common.AST as AST
-import Language.Python.Common.Token as Token 
+import Language.Python.Common.Token as Token
 import Language.Python.Common.ParserMonad hiding (location)
-import Language.Python.Common.SrcLocation 
+import Language.Python.Common.SrcLocation
 
 makeConditionalExpr :: ExprSpan -> Maybe (ExprSpan, ExprSpan) -> ExprSpan
 makeConditionalExpr e Nothing = e
@@ -32,8 +32,8 @@ makeBinOp e es
    where
    mkOp e1 (op, e2) = BinaryOp op e1 e2 (spanning e1 e2)
 
-parseError :: Token -> P a 
-parseError = throwError . UnexpectedToken 
+parseError :: Token -> P a
+parseError = throwError . UnexpectedToken
 
 data Trailer
    = TrailerCall { trailer_call_args :: [ArgumentSpan], trailer_span :: SrcSpan }
@@ -45,7 +45,7 @@ instance Span Trailer where
 
 data Subscript
    = SubscriptExpr { subscription :: ExprSpan, subscript_span :: SrcSpan }
-   | SubscriptSlice 
+   | SubscriptSlice
      { subscript_slice_span1 :: Maybe ExprSpan
      , subscript_slice_span2 :: Maybe ExprSpan
      , subscript_slice_span3 :: Maybe (Maybe ExprSpan)
@@ -88,26 +88,16 @@ addTrailer
    trail e trail@(TrailerCall { trailer_call_args = args }) = Call e args (spanning e trail)
    trail e trail@(TrailerSubscript { trailer_subs = subs })
       | any isProperSlice subs
-           = SlicedExpr e (map subscriptToSlice subs) (spanning e trail) 
-      | otherwise 
-           = Subscript e (subscriptsToExpr subs) (spanning e trail) 
+           = SlicedExpr e (map subscriptToSlice subs) (spanning e trail)
+      | otherwise
+           = Subscript e (subscriptsToExpr subs) (spanning e trail)
    trail e trail@(TrailerDot { trailer_dot_ident = ident, dot_span = ds })
       = Dot { dot_expr = e, dot_attribute = ident, expr_annot = spanning e trail }
 
 makeTupleOrExpr :: [ExprSpan] -> Maybe Token -> ExprSpan
 makeTupleOrExpr [e] Nothing = e
-makeTupleOrExpr es@(_:_) (Just t) = Tuple es (spanning es t) 
+makeTupleOrExpr es@(_:_) (Just t) = Tuple es (spanning es t)
 makeTupleOrExpr es@(_:_) Nothing  = Tuple es (getSpan es)
-
-makeAssignmentOrExpr :: ExprSpan -> Either [ExprSpan] (AssignOpSpan, ExprSpan) -> StatementSpan
-makeAssignmentOrExpr e (Left es) 
-   = makeNormalAssignment e es
-makeAssignmentOrExpr e (Right ope2)
-   = makeAugAssignment e ope2
-
-makeAugAssignment :: ExprSpan -> (AssignOpSpan, ExprSpan) -> StatementSpan
-makeAugAssignment e1 (op, e2)
-  = AST.AugmentedAssign e1 op e2 (spanning e1 e2)
 
 makeNormalAssignment :: ExprSpan -> [ExprSpan] -> StatementSpan
 makeNormalAssignment e [] = StmtExpr e (getSpan e)
@@ -122,7 +112,7 @@ makeAnnAssignment ato (annotation, ae) = AST.AnnotatedAssign annotation ato ae (
 
 makeTry :: Token -> SuiteSpan -> ([HandlerSpan], [StatementSpan], [StatementSpan]) -> StatementSpan
 makeTry t1 body (handlers, elses, finally)
-   = AST.Try body handlers elses finally 
+   = AST.Try body handlers elses finally
      (spanning (spanning (spanning (spanning t1 body) handlers) elses) finally)
 
 makeParam :: (IdentSpan, Maybe ExprSpan) -> Maybe ExprSpan -> ParameterSpan
@@ -132,29 +122,29 @@ makeParam (name, annot) defaultVal
    paramSpan = spanning (spanning name annot) defaultVal
 
 makeStarParam :: Token -> Maybe (IdentSpan, Maybe ExprSpan) -> ParameterSpan
-makeStarParam t1 Nothing = EndPositional (getSpan t1) 
+makeStarParam t1 Nothing = EndPositional (getSpan t1)
 makeStarParam t1 (Just (name, annot))
-   = VarArgsPos name annot (spanning t1 annot) 
+   = VarArgsPos name annot (spanning t1 annot)
 
 makeStarStarParam :: Token -> (IdentSpan, Maybe ExprSpan) -> ParameterSpan
 makeStarStarParam t1 (name, annot)
-   = VarArgsKeyword name annot (spanning (spanning t1 name) annot) 
+   = VarArgsKeyword name annot (spanning (spanning t1 name) annot)
 
--- version 2 only 
+-- version 2 only
 makeTupleParam :: ParamTupleSpan -> Maybe ExprSpan -> ParameterSpan
 -- just a name
-makeTupleParam p@(ParamTupleName {}) optDefault = 
+makeTupleParam p@(ParamTupleName {}) optDefault =
    Param (param_tuple_name p) Nothing optDefault (spanning p optDefault)
 -- a parenthesised tuple. NOTE: we do not distinguish between (foo) and (foo,)
 makeTupleParam p@(ParamTuple { param_tuple_annot = span }) optDefault =
-   UnPackTuple p optDefault span 
+   UnPackTuple p optDefault span
 
 makeComprehension :: ExprSpan -> CompForSpan -> ComprehensionSpan
 makeComprehension e for = Comprehension (ComprehensionExpr e) for (spanning e for)
 
 makeListForm :: SrcSpan -> Either ExprSpan ComprehensionSpan -> ExprSpan
 makeListForm span (Left tuple@(Tuple {})) = List (tuple_exprs tuple) span
-makeListForm span (Left other) = List [other] span 
+makeListForm span (Left other) = List [other] span
 makeListForm span (Right comprehension) = ListComp comprehension span
 
 makeSet :: ExprSpan -> Either CompForSpan [ExprSpan] -> SrcSpan -> ExprSpan
@@ -191,8 +181,8 @@ makeDecorated ds@(d:_) def = Decorated ds def (spanning d def)
 
 -- suite can't be empty so it is safe to take span over it
 makeFun :: Token -> IdentSpan -> [ParameterSpan] -> Maybe ExprSpan -> SuiteSpan -> StatementSpan
-makeFun t1 name params annot body = 
-   Fun name params annot body $ spanning t1 body 
+makeFun t1 name params annot body =
+   Fun name params annot body $ spanning t1 body
 
 makeReturn :: Token -> Maybe ExprSpan -> StatementSpan
 makeReturn t1 Nothing = AST.Return Nothing (getSpan t1)
@@ -201,25 +191,6 @@ makeReturn t1 expr@(Just e) = AST.Return expr (spanning t1 e)
 makeParenOrGenerator :: Either ExprSpan ComprehensionSpan -> SrcSpan -> ExprSpan
 makeParenOrGenerator (Left e) span = Paren e span
 makeParenOrGenerator (Right comp) span = Generator comp span
-
-makePrint :: Bool -> Maybe ([ExprSpan], Maybe Token) -> SrcSpan -> StatementSpan
-makePrint chevron Nothing span = AST.Print chevron [] False span
-makePrint chevron (Just (args, last_comma)) span =
-   AST.Print chevron args (isJust last_comma) span
-   
-makeRelative :: [Either Token DottedNameSpan] -> ImportRelativeSpan
-makeRelative items =
-   ImportRelative ndots maybeName (getSpan items) 
-   where
-   (ndots, maybeName) = countDots 0 items
-   -- parser ensures that the dotted name will be at the end 
-   -- of the list if it is there at all
-   countDots :: Int -> [Either Token DottedNameSpan] -> (Int, Maybe DottedNameSpan)
-   countDots count [] = (count, Nothing)
-   countDots count (Right name:_) = (count, Just name)
-   countDots count (Left token:rest) = countDots (count + dots token) rest 
-   dots (DotToken {}) = 1
-   dots (EllipsisToken {}) = 3
 
 {-
    See: http://docs.python.org/3.0/reference/expressions.html#calls
@@ -270,7 +241,7 @@ checkArguments args = do
 
    (state 1) Parameters/unpack tuples first.
    (state 2) Then the single star (on its own or with parameter)
-   (state 3) Then more parameters. 
+   (state 3) Then more parameters.
    (state 4) Then the double star form.
 
    XXX fixme, add support for version 2 unpack tuple.
@@ -278,7 +249,7 @@ checkArguments args = do
 
 checkParameters :: [ParameterSpan] -> P [ParameterSpan]
 checkParameters params = do
-   check 1 params 
+   check 1 params
    return params
    where
    check :: Int -> [ParameterSpan] -> P ()
@@ -289,10 +260,10 @@ checkParameters params = do
          -- Param and UnPackTuple are treated the same.
          UnPackTuple {}
             | state `elem` [1,3] -> check state rest
-            | state == 2 -> check 3 rest 
+            | state == 2 -> check 3 rest
          Param {}
             | state `elem` [1,3] -> check state rest
-            | state == 2 -> check 3 rest 
+            | state == 2 -> check 3 rest
          EndPositional {}
             | state == 1 -> check 2 rest
             | otherwise -> spanError param "there must not be two *parameters in a parameter list"

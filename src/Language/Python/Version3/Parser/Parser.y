@@ -69,19 +69,6 @@ import Data.Maybe (isJust, maybeToList)
    '!='            { NotEqualsToken {} }
    '.'             { DotToken {} }
    '...'           { EllipsisToken {} }
-   '+='            { PlusAssignToken {} }
-   '-='            { MinusAssignToken {} }
-   '*='            { MultAssignToken {} }
-   '/='            { DivAssignToken {} }
-   '%='            { ModAssignToken {} }
-   '**='           { PowAssignToken {} }
-   '&='            { BinAndAssignToken {} }
-   '|='            { BinOrAssignToken {} }
-   '^='            { BinXorAssignToken {} }
-   '<<='           { LeftShiftAssignToken {} }
-   '>>='           { RightShiftAssignToken {} }
-   '//='           { FloorDivAssignToken {} }
-   '@='            { MatrixMultAssignToken {} }
    '@'             { AtToken {} }
    '->'            { RightArrowToken {} }
    'and'           { AndToken {} }
@@ -337,14 +324,13 @@ small_stmt
    | flow_stmt     { $1 }
    | assert_stmt   { $1 }
 
-{- expr_stmt: testlist_star_expr (annassign | augassign testlist |
+{- expr_stmt: testlist_star_expr (annassign |
                         ('=' testlist_star_expr)*)
 -}
 
 expr_stmt :: { StatementSpan }
 expr_stmt
    : testlist_star_expr many_assign { makeNormalAssignment $1 $2 }
-   | testlist_star_expr augassign_testlist { makeAugAssignment $1 $2 }
    | testlist_star_expr annassign { makeAnnAssignment $1 $2 }
 
 many_assign :: { [ExprSpan] }
@@ -352,9 +338,6 @@ many_assign : many0(right('=', testlist_star)) { $1 }
 
 testlist_star :: { ExprSpan }
 testlist_star : testlist_star_expr { $1 }
-
-augassign_testlist :: { (AssignOpSpan, ExprSpan) }
-augassign_testlist : augassign testlist { ($1, $2) }
 
 -- testlist_star_expr: (test|star_expr) (',' (test|star_expr))* [',']
 
@@ -367,27 +350,6 @@ testlist_star_rev :: { [ExprSpan] }
 testlist_star_rev
    : or(test,star_expr) { [$1] }
    | testlist_star_rev ',' or(test,star_expr) { $3 : $1 }
-
-{-
-   augassign: ('+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' |
-            '<<=' | '>>=' | '**=' | '//=' | '@=')
--}
-
-augassign :: { AssignOpSpan }
-augassign
-   : '+='  { AST.PlusAssign (getSpan $1) }
-   | '-='  { AST.MinusAssign (getSpan $1) }
-   | '*='  { AST.MultAssign (getSpan $1) }
-   | '/='  { AST.DivAssign (getSpan $1) }
-   | '%='  { AST.ModAssign (getSpan $1) }
-   | '**=' { AST.PowAssign (getSpan $1) }
-   | '&='  { AST.BinAndAssign (getSpan $1) }
-   | '|='  { AST.BinOrAssign (getSpan $1) }
-   | '^='  { AST.BinXorAssign (getSpan $1) }
-   | '<<=' { AST.LeftShiftAssign (getSpan $1) }
-   | '>>=' { AST.RightShiftAssign (getSpan $1) }
-   | '//=' { AST.FloorDivAssign (getSpan $1) }
-   | '@='  { AST.MatrixMultAssign (getSpan $1) }
 
 -- annassign: ':' test ['=' test]
 
