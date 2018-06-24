@@ -128,7 +128,6 @@ import Data.Maybe (isJust, maybeToList)
    'unicodestring' { UnicodeStringToken {} }
    'while'         { WhileToken {} }
    'with'          { WithToken {} }
-   'yield'         { YieldToken {} }
 
 %%
 
@@ -344,39 +343,36 @@ small_stmt
    | nonlocal_stmt { $1 }
    | assert_stmt   { $1 }
 
-{- expr_stmt: testlist_star_expr (annassign | augassign (yield_expr|testlist) |
-                        ('=' (yield_expr|testlist_star_expr))*)
+{- expr_stmt: testlist_star_expr (annassign | augassign testlist |
+                        ('=' testlist_star_expr)*)
 -}
 
 expr_stmt :: { StatementSpan }
 expr_stmt
    : testlist_star_expr many_assign { makeNormalAssignment $1 $2 }
-   | testlist_star_expr augassign_yield_or_test_list { makeAugAssignment $1 $2 }
+   | testlist_star_expr augassign_testlist { makeAugAssignment $1 $2 }
    | testlist_star_expr annassign { makeAnnAssignment $1 $2 }
 
 many_assign :: { [ExprSpan] }
-many_assign : many0(right('=', yield_or_test_list_star)) { $1 }
+many_assign : many0(right('=', testlist_star)) { $1 }
 
-yield_or_test_list :: { ExprSpan }
-yield_or_test_list : or(yield_expr,testlist) { $1 }
+testlist_star :: { ExprSpan }
+testlist_star : testlist_star_expr { $1 }
 
-yield_or_test_list_star :: { ExprSpan }
-yield_or_test_list_star : or(yield_expr,testlist_star_expr) { $1 }
-
-augassign_yield_or_test_list :: { (AssignOpSpan, ExprSpan) }
-augassign_yield_or_test_list : augassign yield_or_test_list { ($1, $2) }
+augassign_testlist :: { (AssignOpSpan, ExprSpan) }
+augassign_testlist : augassign testlist { ($1, $2) }
 
 -- testlist_star_expr: (test|star_expr) (',' (test|star_expr))* [',']
 
 testlist_star_expr :: { ExprSpan }
 testlist_star_expr
-   : test_list_star_rev opt_comma
+   : testlist_star_rev opt_comma
      { makeTupleOrExpr (reverse $1) $2 }
 
-test_list_star_rev :: { [ExprSpan] }
-test_list_star_rev
+testlist_star_rev :: { [ExprSpan] }
+testlist_star_rev
    : or(test,star_expr) { [$1] }
-   | test_list_star_rev ',' or(test,star_expr) { $3 : $1 }
+   | testlist_star_rev ',' or(test,star_expr) { $3 : $1 }
 
 {-
    augassign: ('+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' |
@@ -414,7 +410,7 @@ del_stmt : 'del' exprlist { AST.Delete $2 (spanning $1 $2) }
 pass_stmt :: { StatementSpan }
 pass_stmt : 'pass' { AST.Pass (getSpan $1) }
 
--- flow_stmt: break_stmt | continue_stmt | return_stmt | raise_stmt | yield_stmt
+-- flow_stmt: break_stmt | continue_stmt | return_stmt | raise_stmt
 
 flow_stmt :: { StatementSpan }
 flow_stmt
@@ -422,7 +418,6 @@ flow_stmt
    | continue_stmt { $1 }
    | return_stmt   { $1 }
    | raise_stmt    { $1 }
-   | yield_stmt    { $1 }
 
 -- break_stmt: 'break'
 
@@ -438,11 +433,6 @@ continue_stmt : 'continue' { AST.Continue (getSpan $1) }
 
 return_stmt :: { StatementSpan }
 return_stmt : 'return' optional_testlist { makeReturn $1 $2 }
-
--- yield_stmt: yield_expr
-
-yield_stmt :: { StatementSpan }
-yield_stmt : yield_expr { StmtExpr $1 (getSpan $1) }
 
 -- raise_stmt: 'raise' [test ['from' test]]
 
@@ -802,14 +792,14 @@ exponent_op :: { OpSpan }
 exponent_op: '**' { AST.Exponent (getSpan $1) }
 
 {-
-   atom: ('(' [yield_expr|testlist_comp] ')' |
+   atom: ('(' [testlist_comp] ')' |
           '[' [testlist_comp] ']' |
           '{' [dictorsetmaker] '}' |
            NAME | NUMBER | STRING+ | '...' | 'None' | 'True' | 'False')
 -}
 
 atom :: { ExprSpan }
-atom : '(' yield_or_testlist_comp ')' { $2 (spanning $1 $3) }
+atom : '(' testlist_comp ')' { $2 (spanning $1 $3) }
      | list_atom                      { $1 }
      | dict_or_set_atom               { $1 }
      | NAME                           { AST.Var $1 (getSpan $1) }
@@ -827,23 +817,22 @@ atom : '(' yield_or_testlist_comp ')' { $2 (spanning $1 $3) }
 list_atom :: { ExprSpan }
 list_atom
    : '[' ']' { List [] (spanning $1 $2) }
-   | '[' testlist_comp ']' { makeListForm (spanning $1 $3) $2 }
+   | '[' testlist_comp_e ']' { makeListForm (spanning $1 $3) $2 }
 
 dict_or_set_atom :: { ExprSpan }
 dict_or_set_atom
    : '{' '}' { Dictionary [] (spanning $1 $2) }
    | '{' dictorsetmaker '}' { $2 (spanning $1 $3) }
 
-yield_or_testlist_comp :: { SrcSpan -> ExprSpan }
-yield_or_testlist_comp
+testlist_comp :: { SrcSpan -> ExprSpan }
+testlist_comp
    : {- empty -} { Tuple [] }
-   | yield_expr { Paren $1 }
-   | testlist_comp { either Paren Generator $1 }
+   | testlist_comp_e { either Paren Generator $1 }
 
 -- testlist_comp: (test|star_expr) ( comp_for | (',' (test|star_expr))* [','] )
 
-testlist_comp :: { Either ExprSpan ComprehensionSpan }
-testlist_comp
+testlist_comp_e :: { Either ExprSpan ComprehensionSpan }
+testlist_comp_e
    : testlist_star_expr { Left $1 }
    | or(test,star_expr) comp_for { Right (makeComprehension $1 $2) }
 
@@ -1003,23 +992,8 @@ comp_if
 -- encoding_decl: NAME
 -- Not used in the rest of the grammar!
 
--- yield_expr: 'yield' [yield_arg]
-
-yield_expr :: { ExprSpan }
-yield_expr : 'yield' optional_yieldarg { AST.Yield $2 (spanning $1 $2) }
-
 optional_testlist :: { Maybe ExprSpan }
 optional_testlist: opt(testlist) { $1 }
-
-optional_yieldarg :: { Maybe YieldArgSpan }
-optional_yieldarg: opt(yieldarg) { $1 }
-
--- yield_arg: 'from' test | testlist
-
-yieldarg :: { YieldArgSpan }
-yieldarg
-   : 'from' test { YieldFrom $2 (spanning $1 $2) }
-   | testlist { YieldExpr $1 }
 
 {
 -- Put additional Haskell code in here if needed.
