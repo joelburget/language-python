@@ -104,11 +104,9 @@ import Data.Maybe (isJust, maybeToList)
    'float'         { FloatToken {} }
    'for'           { ForToken {} }
    'from'          { FromToken {} }
-   'global'        { GlobalToken {} }
    'ident'         { IdentifierToken {} }
    'if'            { IfToken {} }
    'imaginary'     { ImaginaryToken {} }
-   'import'        { ImportToken {} }
    'indent'        { IndentToken {} }
    'in'            { InToken {} }
    'integer'       { IntegerToken {} }
@@ -116,7 +114,6 @@ import Data.Maybe (isJust, maybeToList)
    'lambda'        { LambdaToken {} }
    'NEWLINE'       { NewlineToken {} }
    'None'          { NoneToken {} }
-   'nonlocal'      { NonLocalToken {} }
    'not'           { NotToken {} }
    'or'            { OrToken {} }
    'pass'          { PassToken {} }
@@ -329,7 +326,7 @@ small_stmts
 
 {-
 small_stmt: (expr_stmt | del_stmt | pass_stmt | flow_stmt |
-             import_stmt | global_stmt | nonlocal_stmt | assert_stmt)
+             assert_stmt)
 -}
 
 small_stmt :: { StatementSpan }
@@ -338,9 +335,6 @@ small_stmt
    | del_stmt      { $1 }
    | pass_stmt     { $1 }
    | flow_stmt     { $1 }
-   | import_stmt   { $1 }
-   | global_stmt   { $1 }
-   | nonlocal_stmt { $1 }
    | assert_stmt   { $1 }
 
 {- expr_stmt: testlist_star_expr (annassign | augassign testlist |
@@ -440,82 +434,10 @@ raise_stmt :: { StatementSpan }
 raise_stmt : 'raise' opt(pair(test, opt(right('from', test))))
              { AST.Raise (RaiseV3 $2) (spanning $1 $2) }
 
--- import_stmt: import_name | import_from
-
-import_stmt :: { StatementSpan }
-import_stmt: or(import_name, import_from) { $1 }
-
--- import_name: 'import' dotted_as_names
-
-import_name :: { StatementSpan }
-import_name : 'import' dotted_as_names { AST.Import $2 (spanning $1 $2) }
-
-{-
-   # note below: the ('.' | '...') is necessary because '...' is tokenized as ELLIPSIS
-   import_from: ('from' (('.' | '...')* dotted_name | ('.' | '...')+)
-                 'import' ('*' | '(' import_as_names ')' | import_as_names))
--}
-
-import_from :: { StatementSpan }
-import_from : 'from' import_module 'import' star_or_as_names
-              { FromImport $2 $4 (spanning $1 $4) }
-
-import_module :: { ImportRelativeSpan }
-import_module: import_module_dots { makeRelative $1 }
-
-import_module_dots :: { [Either Token DottedNameSpan] }
-import_module_dots
-   : '.'                      { [ Left $1 ] }
-   | '...'                    { [ Left $1 ] }
-   | dotted_name              { [ Right $1 ] }
-   | '.' import_module_dots   { Left $1 : $2 }
-   | '...' import_module_dots { Left $1 : $2 }
-
-star_or_as_names :: { FromItemsSpan }
-star_or_as_names
-   : '*'                     { ImportEverything (getSpan $1) }
-   | '(' import_as_names ')' { $2 }
-   | import_as_names         { $1 }
-
--- import_as_name: NAME ['as' NAME]
-import_as_name :: { FromItemSpan }
-import_as_name
-   : NAME optional_as_name { FromItem $1 $2 (spanning $1 $2) }
-
--- dotted_as_name: dotted_name ['as' NAME]
-
-dotted_as_name :: { ImportItemSpan }
-dotted_as_name
-   : dotted_name optional_as_name
-     { ImportItem $1 $2 (spanning $1 $2) }
-
--- import_as_names: import_as_name (',' import_as_name)* [',']
-
-import_as_names :: { FromItemsSpan }
-import_as_names : sepOptEndBy(import_as_name, ',') { FromItems $1 (getSpan $1) }
-
--- dotted_as_names: dotted_as_name (',' dotted_as_name)*
-
-dotted_as_names :: { [ImportItemSpan] }
-dotted_as_names : sepBy(dotted_as_name,',') { $1 }
-
 -- dotted_name: NAME ('.' NAME)*
 
 dotted_name :: { DottedNameSpan }
 dotted_name : NAME many0(right('.', NAME)) { $1 : $2 }
-
--- global_stmt: 'global' NAME (',' NAME)*
-
-global_stmt :: { StatementSpan }
-global_stmt : 'global' one_or_more_names { AST.Global $2 (spanning $1 $2) }
-
-one_or_more_names :: { [IdentSpan] }
-one_or_more_names: sepBy(NAME, ',') { $1 }
-
--- nonlocal_stmt: 'nonlocal' NAME (',' NAME)*
-
-nonlocal_stmt :: { StatementSpan }
-nonlocal_stmt : 'nonlocal' one_or_more_names { AST.NonLocal $2 (spanning $1 $2) }
 
 -- assert_stmt: 'assert' test [',' test]
 
@@ -623,9 +545,6 @@ except_clause : 'except' opt(pair(test, optional_as_expr)) { ExceptClause $2 (sp
 
 optional_as_expr :: { Maybe ExprSpan}
 optional_as_expr: opt(right('as', test)) { $1 }
-
-optional_as_name :: { Maybe IdentSpan }
-optional_as_name: opt(right('as', NAME)) { $1 }
 
 -- suite: simple_stmt | NEWLINE INDENT stmt+ DEDENT
 -- Note: we don't have a newline before indent b/c it is redundant
