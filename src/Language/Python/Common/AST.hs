@@ -45,7 +45,6 @@ module Language.Python.Common.AST (
    , Argument (..), ArgumentSpan
    , Slice (..), SliceSpan
    , DictKeyDatumList (..), DictKeyDatumListSpan
-   , YieldArg (..), YieldArgSpan
    -- * Exceptions
    , Handler (..), HandlerSpan
    , ExceptClause (..), ExceptClauseSpan
@@ -555,16 +554,8 @@ data Expr annot
    | Lambda { lambda_args :: [Parameter annot], lambda_body :: Expr annot, expr_annot :: annot }
    -- | Tuple. Can be empty.
    | Tuple { tuple_exprs :: [Expr annot], expr_annot :: annot }
-   -- | Generator yield.
-   | Yield
-     -- { yield_expr :: Maybe (Expr annot) -- ^ Optional expression to yield.
-     { yield_arg :: Maybe (YieldArg annot) -- ^ Optional Yield argument.
-     , expr_annot :: annot
-     }
    -- | Generator.
    | Generator { gen_comprehension :: Comprehension annot, expr_annot :: annot }
-   -- | Await
-   | Await { await_expr :: Expr annot, expr_annot :: annot }
    -- | List comprehension.
    | ListComp { list_comprehension :: Comprehension annot, expr_annot :: annot }
    -- | List.
@@ -589,17 +580,6 @@ type ExprSpan = Expr SrcSpan
 
 instance Span ExprSpan where
    getSpan = annot
-
-data YieldArg annot
-   = YieldFrom (Expr annot) annot -- ^ Yield from a generator (Version 3 only)
-   | YieldExpr (Expr annot) -- ^ Yield value of an expression
-   deriving (Eq,Ord,Show,Typeable,Data,Functor)
-
-type YieldArgSpan = YieldArg SrcSpan
-
-instance Span YieldArgSpan where
-   getSpan (YieldFrom _e span) = span
-   getSpan (YieldExpr e) = getSpan e
 
 instance Annotated Expr where
    annot = expr_annot

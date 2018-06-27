@@ -75,7 +75,6 @@ import Data.Maybe (isJust, maybeToList)
    'as'            { AsToken {} }
    'assert'        { AssertToken {} }
    'async'         { AsyncToken {} }
-   'await'         { AwaitToken {} }
    'break'         { BreakToken {} }
    'bytestring'    { ByteStringToken {} }
    'class'         { ClassToken {} }
@@ -659,14 +658,10 @@ factor
 tilde_op :: { OpSpan }
 tilde_op: '~' { AST.Invert (getSpan $1) }
 
--- await_expr: 'await' primary
-await_expr :: { ExprSpan }
-await_expr : 'await' atom { AST.Await $2 (spanning $1 $2) }
-
 -- power: atom trailer* ['**' factor]
 
 power :: { ExprSpan }
-power : or(await_expr, atom) many0(trailer) opt(pair(exponent_op, factor))
+power : atom many0(trailer) opt(pair(exponent_op, factor))
         { makeBinOp (addTrailer $1 $2) (maybeToList $3) }
 
 exponent_op :: { OpSpan }
